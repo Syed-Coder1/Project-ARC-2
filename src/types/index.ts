@@ -89,7 +89,7 @@ export interface WhiteboardContent {
 
 export interface WhiteboardElement {
   id: string;
-  type: 'text' | 'shape' | 'arrow' | 'sticky' | 'image' | 'drawing';
+  type: 'text' | 'shape' | 'arrow' | 'sticky' | 'image' | 'drawing' | 'rectangle' | 'circle' | 'triangle';
   position: { x: number; y: number };
   size: { width: number; height: number };
   content: string;
