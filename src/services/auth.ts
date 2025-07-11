@@ -8,8 +8,8 @@ class AuthService {
     await db.init();
     
     // Create default admin account if no users exist
-    const users = await db.getAllUsers();
-    if (users.length === 0) {
+    const adminUser = await db.getUserByUsername('admin');
+    if (!adminUser) {
       await db.createUser({
         username: 'admin',
         password: 'admin123',
