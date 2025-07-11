@@ -25,7 +25,12 @@ import {
   Eraser,
   Palette,
   Minus,
-  Plus
+  Plus,
+  Home,
+  Users,
+  Lightbulb,
+  Sparkles,
+  Move3D
 } from 'lucide-react';
 import { Whiteboard, WhiteboardElement } from '../types';
 import { clsx } from 'clsx';
@@ -57,7 +62,7 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const [showGrid, setShowGrid] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [currentPath, setCurrentPath] = useState<DrawingPath | null>(null);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
@@ -67,9 +72,9 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
   const [historyIndex, setHistoryIndex] = useState(-1);
   
   // Drawing settings
-  const [strokeColor, setStrokeColor] = useState('#000000');
+  const [strokeColor, setStrokeColor] = useState('#3B82F6');
   const [fillColor, setFillColor] = useState('#ffffff');
-  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [strokeWidth, setStrokeWidth] = useState(3);
   const [fontSize, setFontSize] = useState(16);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -113,12 +118,9 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    const container = containerRef.current;
-    if (container) {
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-    }
+    // Set canvas size to full window
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
     // Clear and redraw
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -139,11 +141,25 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
     }
   }, [drawingPaths, currentPath, showGrid, zoom, pan]);
 
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    const gridSize = 20 * zoom;
-    ctx.strokeStyle = '#e5e7eb';
+    const gridSize = 30 * zoom;
+    ctx.strokeStyle = '#374151';
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.3;
 
     // Vertical lines
     for (let x = pan.x % gridSize; x < width; x += gridSize) {
@@ -330,13 +346,13 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
       type,
       position,
       size: { 
-        width: type === 'text' ? 200 : 100, 
-        height: type === 'text' ? 50 : 100 
+        width: type === 'text' ? 200 : type === 'sticky' ? 150 : 100, 
+        height: type === 'text' ? 50 : type === 'sticky' ? 150 : 100 
       },
       content: type === 'text' ? 'Double-click to edit' : type === 'sticky' ? 'Type here...' : '',
       style: {
         color: strokeColor,
-        backgroundColor: type === 'sticky' ? '#fef08a' : fillColor,
+        backgroundColor: type === 'sticky' ? '#FEF08A' : type === 'text' ? 'transparent' : fillColor,
         fontSize: fontSize,
         strokeWidth: strokeWidth,
         opacity: 1
@@ -416,247 +432,77 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
     link.click();
   };
 
-  const tools = [
-    { id: 'cursor', icon: MousePointer, label: 'Select' },
-    { id: 'hand', icon: Hand, label: 'Pan' },
-    { id: 'pen', icon: Pen, label: 'Pen' },
-    { id: 'eraser', icon: Eraser, label: 'Eraser' },
-    { id: 'text', icon: Type, label: 'Text' },
-    { id: 'rectangle', icon: Square, label: 'Rectangle' },
-    { id: 'circle', icon: Circle, label: 'Circle' },
-    { id: 'triangle', icon: Triangle, label: 'Triangle' },
-    { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
-    { id: 'sticky', icon: StickyNote, label: 'Sticky Note' },
-    { id: 'image', icon: Image, label: 'Image' },
+  const colors = [
+    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', 
+    '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
+    '#000000', '#FFFFFF', '#6B7280', '#DC2626', '#059669'
   ];
 
-  const colors = [
-    '#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff',
-    '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080',
-    '#ffc0cb', '#a52a2a', '#808080', '#000080', '#008000'
-  ];
+  const getCursor = () => {
+    switch (currentTool) {
+      case 'hand': return isPanning ? 'grabbing' : 'grab';
+      case 'pen': return 'crosshair';
+      case 'eraser': return 'crosshair';
+      case 'text': return 'text';
+      default: return 'default';
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+    <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col overflow-hidden">
+      {/* Top Header */}
+      <div className="flex items-center justify-between p-3 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center space-x-4">
           <button
             onClick={onClose}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-700"
           >
             <X size={20} />
           </button>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {whiteboard.name}
-            </h1>
-            <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
-              <span>
-                {autoSaveStatus === 'saved' && 'All changes saved'}
-                {autoSaveStatus === 'saving' && 'Saving...'}
-                {autoSaveStatus === 'unsaved' && 'Unsaved changes'}
-              </span>
-              {autoSaveStatus === 'saving' && (
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-              )}
-            </div>
+          <div className="flex items-center space-x-2">
+            <Home size={16} className="text-gray-400" />
+            <span className="text-gray-400">/</span>
+            <span className="text-white font-medium">{whiteboard.name}</span>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={handleSaveManual}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Save size={16} />
-            Save
+          <div className="flex items-center space-x-1 bg-gray-700 rounded-lg p-1">
+            <div className="w-6 h-6 bg-blue-500 rounded text-white text-xs flex items-center justify-center font-medium">
+              U
+            </div>
+            <div className="w-6 h-6 bg-purple-500 rounded text-white text-xs flex items-center justify-center font-medium">
+              M
+            </div>
+          </div>
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+            <Share size={16} />
+            Share
           </button>
           <button
             onClick={() => {/* TODO: Toggle favorite */}}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-yellow-500 transition-colors"
+            className="p-2 text-gray-400 hover:text-yellow-500 transition-colors"
           >
             {whiteboard.isFavorite ? <Star size={20} className="fill-current text-yellow-500" /> : <StarOff size={20} />}
           </button>
-          <button
-            onClick={() => {/* TODO: Share */}}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-green-500 transition-colors"
-          >
-            <Share size={20} />
+          <button className="p-2 text-gray-400 hover:text-white transition-colors">
+            <MoreHorizontal size={20} />
           </button>
           <button
-            onClick={handleExport}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-500 transition-colors"
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-white transition-colors"
           >
-            <Download size={20} />
+            <X size={20} />
           </button>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <div className="flex items-center space-x-2">
-          {tools.map((tool) => (
-            <button
-              key={tool.id}
-              onClick={() => handleToolSelect(tool.id as Tool)}
-              className={clsx(
-                "p-2 rounded-lg transition-colors",
-                currentTool === tool.id
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-              )}
-              title={tool.label}
-            >
-              <tool.icon size={20} />
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center space-x-4">
-          {/* Color Picker */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-            >
-              <Palette size={16} />
-              <div 
-                className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600"
-                style={{ backgroundColor: strokeColor }}
-              />
-            </button>
-            
-            {showColorPicker && (
-              <div className="absolute top-full mt-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {colors.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => {
-                        setStrokeColor(color);
-                        setShowColorPicker(false);
-                      }}
-                      className={clsx(
-                        "w-8 h-8 rounded border-2 transition-transform hover:scale-110",
-                        strokeColor === color ? "border-blue-500" : "border-gray-300 dark:border-gray-600"
-                      )}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-                <input
-                  type="color"
-                  value={strokeColor}
-                  onChange={(e) => setStrokeColor(e.target.value)}
-                  className="w-full h-8 rounded border border-gray-300 dark:border-gray-600"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Stroke Width */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setStrokeWidth(Math.max(1, strokeWidth - 1))}
-              className="p-1 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-            >
-              <Minus size={16} />
-            </button>
-            <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[30px] text-center">
-              {strokeWidth}px
-            </span>
-            <button
-              onClick={() => setStrokeWidth(Math.min(20, strokeWidth + 1))}
-              className="p-1 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-          {/* History Controls */}
-          <button
-            onClick={handleUndo}
-            disabled={historyIndex <= 0}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Undo"
-          >
-            <Undo size={20} />
-          </button>
-          <button
-            onClick={handleRedo}
-            disabled={historyIndex >= history.length - 1}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Redo"
-          >
-            <Redo size={20} />
-          </button>
-
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-          {/* Grid Toggle */}
-          <button
-            onClick={() => setShowGrid(!showGrid)}
-            className={clsx(
-              "p-2 rounded-lg transition-colors",
-              showGrid
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-            )}
-            title="Toggle Grid"
-          >
-            <Grid size={20} />
-          </button>
-
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-          {/* Zoom Controls */}
-          <button
-            onClick={handleZoomOut}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            title="Zoom Out"
-          >
-            <ZoomOut size={20} />
-          </button>
-          <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[60px] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={handleZoomIn}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            title="Zoom In"
-          >
-            <ZoomIn size={20} />
-          </button>
-          <button
-            onClick={handleZoomReset}
-            className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-            title="Reset Zoom"
-          >
-            Reset
-          </button>
-
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-          {/* Clear Canvas */}
-          <button
-            onClick={clearCanvas}
-            className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            title="Clear Canvas"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      {/* Canvas Container */}
-      <div className="flex-1 overflow-hidden relative bg-gray-100 dark:bg-gray-900">
+      {/* Main Canvas Area */}
+      <div className="flex-1 relative overflow-hidden">
         <div
           ref={containerRef}
           className="w-full h-full relative"
-          style={{ cursor: currentTool === 'hand' ? 'grab' : currentTool === 'pen' ? 'crosshair' : 'default' }}
+          style={{ cursor: getCursor() }}
         >
           <canvas
             ref={canvasRef}
@@ -675,6 +521,21 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
               transformOrigin: '0 0'
             }}
           >
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="7"
+                refX="9"
+                refY="3.5"
+                orient="auto"
+              >
+                <polygon
+                  points="0 0, 10 3.5, 0 7"
+                  fill={strokeColor}
+                />
+              </marker>
+            </defs>
             {elements.map((element) => (
               <g key={element.id}>
                 {element.type === 'rectangle' && (
@@ -688,7 +549,7 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
                     strokeWidth={element.style.strokeWidth}
                     className={clsx(
                       "pointer-events-auto cursor-pointer",
-                      selectedElement === element.id && "stroke-blue-500 stroke-2"
+                      selectedElement === element.id && "stroke-blue-400 stroke-2"
                     )}
                   />
                 )}
@@ -703,7 +564,7 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
                     strokeWidth={element.style.strokeWidth}
                     className={clsx(
                       "pointer-events-auto cursor-pointer",
-                      selectedElement === element.id && "stroke-blue-500 stroke-2"
+                      selectedElement === element.id && "stroke-blue-400 stroke-2"
                     )}
                   />
                 )}
@@ -715,38 +576,21 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
                     strokeWidth={element.style.strokeWidth}
                     className={clsx(
                       "pointer-events-auto cursor-pointer",
-                      selectedElement === element.id && "stroke-blue-500 stroke-2"
+                      selectedElement === element.id && "stroke-blue-400 stroke-2"
                     )}
                   />
                 )}
                 {element.type === 'arrow' && (
-                  <g>
-                    <line
-                      x1={element.position.x}
-                      y1={element.position.y + element.size.height / 2}
-                      x2={element.position.x + element.size.width - 10}
-                      y2={element.position.y + element.size.height / 2}
-                      stroke={element.style.color}
-                      strokeWidth={element.style.strokeWidth}
-                      markerEnd="url(#arrowhead)"
-                      className="pointer-events-auto cursor-pointer"
-                    />
-                    <defs>
-                      <marker
-                        id="arrowhead"
-                        markerWidth="10"
-                        markerHeight="7"
-                        refX="9"
-                        refY="3.5"
-                        orient="auto"
-                      >
-                        <polygon
-                          points="0 0, 10 3.5, 0 7"
-                          fill={element.style.color}
-                        />
-                      </marker>
-                    </defs>
-                  </g>
+                  <line
+                    x1={element.position.x}
+                    y1={element.position.y + element.size.height / 2}
+                    x2={element.position.x + element.size.width}
+                    y2={element.position.y + element.size.height / 2}
+                    stroke={element.style.color}
+                    strokeWidth={element.style.strokeWidth}
+                    markerEnd="url(#arrowhead)"
+                    className="pointer-events-auto cursor-pointer"
+                  />
                 )}
               </g>
             ))}
@@ -767,16 +611,16 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
                     className={clsx(
                       "absolute pointer-events-auto cursor-pointer border-2 transition-all duration-200",
                       selectedElement === element.id 
-                        ? "border-blue-500 shadow-lg" 
-                        : "border-transparent hover:border-gray-300",
-                      element.type === 'sticky' && "bg-yellow-200 dark:bg-yellow-300 shadow-md rounded-lg"
+                        ? "border-blue-400 shadow-lg" 
+                        : "border-transparent hover:border-gray-500",
+                      element.type === 'sticky' && "shadow-lg rounded-lg"
                     )}
                     style={{
                       left: element.position.x,
                       top: element.position.y,
                       width: element.size.width,
                       height: element.size.height,
-                      backgroundColor: element.type === 'text' ? 'transparent' : element.style.backgroundColor,
+                      backgroundColor: element.style.backgroundColor,
                       color: element.style.color,
                       fontSize: element.style.fontSize,
                       opacity: element.style.opacity,
@@ -807,10 +651,29 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
           </div>
         </div>
 
+        {/* Zoom Controls - Top Left */}
+        <div className="absolute top-4 left-4 flex items-center space-x-2 bg-gray-800 rounded-lg p-2 border border-gray-700">
+          <button
+            onClick={handleZoomOut}
+            className="p-2 text-gray-400 hover:text-white transition-colors rounded hover:bg-gray-700"
+          >
+            <ZoomOut size={16} />
+          </button>
+          <span className="text-white text-sm min-w-[50px] text-center">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={handleZoomIn}
+            className="p-2 text-gray-400 hover:text-white transition-colors rounded hover:bg-gray-700"
+          >
+            <ZoomIn size={16} />
+          </button>
+        </div>
+
         {/* Element Properties Panel */}
         {selectedElement && (
-          <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 w-64">
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Element Properties</h3>
+          <div className="absolute top-4 right-4 bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-4 w-64">
+            <h3 className="font-semibold text-white mb-3">Element Properties</h3>
             <div className="space-y-3">
               <button
                 onClick={() => deleteElement(selectedElement)}
@@ -821,6 +684,236 @@ export function WhiteboardEditor({ whiteboard, onSave, onClose }: WhiteboardEdit
             </div>
           </div>
         )}
+      </div>
+
+      {/* Bottom Toolbar */}
+      <div className="bg-gray-800 border-t border-gray-700 p-4">
+        <div className="flex items-center justify-center space-x-6">
+          {/* Left Section - Navigation Tools */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleToolSelect('cursor')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'cursor'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Select"
+            >
+              <MousePointer size={20} />
+            </button>
+            <button
+              onClick={() => handleToolSelect('hand')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'hand'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Pan"
+            >
+              <Hand size={20} />
+            </button>
+          </div>
+
+          <div className="w-px h-8 bg-gray-600" />
+
+          {/* Drawing Tools */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleToolSelect('pen')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'pen'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Pen"
+            >
+              <Pen size={20} />
+            </button>
+            <button
+              onClick={() => handleToolSelect('eraser')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'eraser'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Eraser"
+            >
+              <Eraser size={20} />
+            </button>
+          </div>
+
+          <div className="w-px h-8 bg-gray-600" />
+
+          {/* Shape Tools */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleToolSelect('rectangle')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'rectangle'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Rectangle"
+            >
+              <Square size={20} />
+            </button>
+            <button
+              onClick={() => handleToolSelect('circle')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'circle'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Circle"
+            >
+              <Circle size={20} />
+            </button>
+            <button
+              onClick={() => handleToolSelect('triangle')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'triangle'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Triangle"
+            >
+              <Triangle size={20} />
+            </button>
+            <button
+              onClick={() => handleToolSelect('arrow')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'arrow'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Arrow"
+            >
+              <ArrowRight size={20} />
+            </button>
+          </div>
+
+          <div className="w-px h-8 bg-gray-600" />
+
+          {/* Text & Notes */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleToolSelect('text')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'text'
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Text"
+            >
+              <Type size={20} />
+            </button>
+            <button
+              onClick={() => handleToolSelect('sticky')}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                currentTool === 'sticky'
+                  ? "bg-yellow-500 text-gray-900 shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Sticky Note"
+            >
+              <StickyNote size={20} />
+            </button>
+          </div>
+
+          <div className="w-px h-8 bg-gray-600" />
+
+          {/* Color Picker */}
+          <div className="relative">
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="flex items-center gap-2 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg hover:bg-gray-600 transition-colors"
+            >
+              <div 
+                className="w-6 h-6 rounded border-2 border-gray-500"
+                style={{ backgroundColor: strokeColor }}
+              />
+            </button>
+            
+            {showColorPicker && (
+              <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10">
+                <div className="grid grid-cols-5 gap-2">
+                  {colors.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => {
+                        setStrokeColor(color);
+                        setShowColorPicker(false);
+                      }}
+                      className={clsx(
+                        "w-8 h-8 rounded border-2 transition-transform hover:scale-110",
+                        strokeColor === color ? "border-white" : "border-gray-600"
+                      )}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="w-px h-8 bg-gray-600" />
+
+          {/* History Controls */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleUndo}
+              disabled={historyIndex <= 0}
+              className="p-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Undo"
+            >
+              <Undo size={20} />
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={historyIndex >= history.length - 1}
+              className="p-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Redo"
+            >
+              <Redo size={20} />
+            </button>
+          </div>
+
+          <div className="w-px h-8 bg-gray-600" />
+
+          {/* Additional Tools */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowGrid(!showGrid)}
+              className={clsx(
+                "p-3 rounded-lg transition-all duration-200",
+                showGrid
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-gray-400 hover:text-white hover:bg-gray-700"
+              )}
+              title="Toggle Grid"
+            >
+              <Grid size={20} />
+            </button>
+            <button
+              onClick={clearCanvas}
+              className="p-3 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors"
+              title="Clear Canvas"
+            >
+              <Sparkles size={20} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
